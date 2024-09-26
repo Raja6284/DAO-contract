@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.5.0 <0.9.0;
+
+interface IERC20 {
+    function totalSupply() external view returns (uint256);
+
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(address receiver, uint256 amount) external returns (bool);
+
+    function allowance(address owner, address spender)
+        external
+        view
+        returns (uint256);
+
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    function transferFrom(
+        address sender,
+        address receiver,
+        uint256 amount
+    ) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
+    event burningToken(address _founder, uint256 _quantity);
+}
+
+contract Block is IERC20 {
+    string public name = "Block"; // Name of the token
+    string public symbol = "BLK"; // Symbol of the token
+    uint256 public decimal = 0; // We will talk about this at the end
+    address public founder; // Initially, this will have the total supply
+    uint256 public totalSupply; // Total supply of tokens
+    mapping(address => mapping(address => uint256)) allowed; // Tracks allowances
+    mapping(address => uint256) public balances; // Tracks balances of each account
+    mapping(address => bool) public isFreeze; // Tracks frozen accounts
+    bool stopAllFunctions; // Flag to stop all functions in case of emergency
+
+    constructor() {
+        founder = msg.sender;
+        totalSupply = 1000;
+        balances[founder] = totalSupply;
+    }
+
+    modifier freezeStatus() {
+        require(isFreeze[msg.sender] == false, "Your account is freezed");
+        _;
+    }
+
+    modifier emergencyStatus() {
+        require(stopAllFunctions == false, "Emergency declared");
+        _;
+    }
+
+    // function totalSupply() external view returns(uint256){
+    //     return totalSupply;
+    // }
+
+    function balanceOf(address account) external view returns (uint256) {
+        return balances[account];
+    }
+
+    function transfer(address receiver, uint256 amount)
+        external
+        freezeStatus
+        emergencyStatus
+        returns (bool)
+    {
+        require(amount > 0, "The amount is not valid");
+        require(balances[msg.sender] >= amount, "Not Enough balance");
+        balances[msg.sender] -= amount;
+        balances[receiver] += amount;
+        emit Transfer(msg.sender, receiver, amount);
+        return true;
+    }
+
+    function allowance(address owner, address spender)
+        external
+        view
+        returns (uint256)
+    {
+        return allowed[owner][spender];
+    }
+
+    function approve(address spender, uint256 amount)
+        external
+        freezeStatus
+        emergencyStatus
+        returns (bool)
+    {
+        require(amount > 0, "Amount must be greater than zero");
+        require(
+            balances[msg.sender] >= amount,
+            "You don't have enough balance"
+        );
+        allowed[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount); // Emit Approval event
+        return true;
+    }
+
+    function transferFrom(
+        address sender,
+        address receiver,
+        uint256 amount
+    ) external freezeStatus emergencyStatus returns (bool) {
+        require(amount > 0, "Amount must be greater than zero");
+        require(balances[sender] >= amount, "You don't have enough balance");
+        require(
+            allowed[sender][receiver] >= amount,
+            "Sender has not authorised to receiver for the given amount"
+        );
+        balances[sender] -= amount;
+        balances[receiver] += amount;
+        return true;
+    }
+
+    function burning(uint256 value) public {
+        require(msg.sender == founder, "Only founder can burn tokens");
+        require(value <= totalSupply, "Not enough token to burn");
+        balances[founder] -= value;
+        totalSupply -= value;
+        emit burningToken(msg.sender, value);
+    }
+
+    function freezAccount(address freezingAddress) public {
+        require(msg.sender == founder, "You are not the founder");
+        isFreeze[freezingAddress] = true;
+    }
+
+    function unFreezAccount(address unfreezingAddress) public {
+        require(msg.sender == founder, "You are not the founder");
+        isFreeze[unfreezingAddress] = false;
+    }
+
+    function emergency() public {
+        stopAllFunctions = true;
+    }
+}
